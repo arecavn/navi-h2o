@@ -1,0 +1,6 @@
+input/
+output/
+examples/smalldata/
+bin
+target
+org/
