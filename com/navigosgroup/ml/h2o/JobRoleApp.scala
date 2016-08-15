@@ -83,13 +83,58 @@ class JobRoleApp(jobsFile: String = JobRoleApp.DATA_FILE)
 				val frameToPredict: H2OFrame = sc.parallelize(Seq(vec)).map(v => JobOffer(null, v)).toDF
 				frameToPredict.remove(0).remove()
 				val prediction = model.score(frameToPredict)
-				// Read predicted classifiedRole
-				val predictedCategory = prediction.vec(0).factor(prediction.vec(0).at8(0))
+				// Read predicted classifiedRole (get name (factor) of predicted index (at8) in vec 0)
+				val predictedVal = prediction.vec(0).factor(prediction.vec(0).at8(0))
+				val v1 = prediction.vec(0)
+				// index of predicted val( e.g. "Developer" has index value is 9 in _domain of Vec
+				val v2 = prediction.vec(0).at8(0)
+				// size of vec(0)
+				val v3 = prediction.vec(0).cardinality()
+			
 				// Read probabilities for each classifiedRole
 				val probs = 1 to prediction.vec(0).cardinality() map (idx => prediction.vec(idx).at(0))
+				
+				println("stop here to check")
 				// Cleanup
 				Seq(frameToPredict, prediction).foreach(_.delete)
-				(predictedCategory, probs.toArray)
+				(predictedVal, probs.toArray)
+	}
+	
+	def predict2(jobTitle: String, modelId: String, w2vModel: Word2VecModel): (String,Array[Double],Array[Double]) = {
+		predict2(jobTitle, model = water.DKV.getGet(modelId), w2vModel)
+	}
+	def predict2(jobTitle: String, model: Model[_,_,_], w2vModel: Word2VecModel): (String,Array[Double],Array[Double]) = {
+		val tokens = tokenize(jobTitle, STOP_WORDS)
+				val vec = wordsToVector(tokens, w2vModel)
+
+				// FIXME should use Model#score(double[]) method but it is now wrong and need to be fixed
+				import sqlContext.implicits._
+				import h2oContext.implicits._
+				val frameToPredict: H2OFrame = sc.parallelize(Seq(vec)).map(v => JobOffer(null, v)).toDF
+				frameToPredict.remove(0).remove()
+				val prediction = model.score(frameToPredict)
+				// Read predicted classifiedRole (get name (factor) of predicted index (at8) in vec 0)
+				val predictedVal = prediction.vec(0).factor(prediction.vec(0).at8(0))
+				val v1 = prediction.vec(0)
+				// index of predicted val( e.g. "Developer" has index value is 9 in _domain of Vec
+				val v2 = prediction.vec(0).at8(0)
+				// size of vec(0)
+				val v3 = prediction.vec(0).cardinality()
+			
+				// Read probabilities for each classifiedRole
+				val probs = 1 to prediction.vec(0).cardinality() map (idx => prediction.vec(idx).at(0))
+				
+				val top3ClassName = Array("","","")			
+
+			
+
+				val top3Probs = probs.toList.sortBy(_.doubleValue()).reverse.take(3) 				
+
+
+				println("stop here to check")
+				// Cleanup
+				Seq(frameToPredict, prediction).foreach(_.delete)
+				(predictedVal,top3Probs.toArray, probs.toArray)
 	}
 
 	def classify(jobTitle: String, modelId: String, w2vModel: Word2VecModel): (String, Array[Double]) = {
@@ -171,6 +216,15 @@ class JobRoleApp(jobsFile: String = JobRoleApp.DATA_FILE)
 		val probs = classNames.zip(pred._2).map(v => f"${v._1}: ${v._2}%.3f")
 				input + " ==> " + pred._1 + ":" + pred._2.reduceLeft(_ max _) + probs.mkString("[", ", ", "]")
 	}
+	def predictedProbability(input: String, pred: (String, Array[Double])): String = {
+				input + "\\t" + pred._1 + "\\t" + pred._2.reduceLeft(_ max _)
+	}
+	def printClassNames(){
+			
+	}
+	def top3ClassNames(pred: (String, Array[Double]), classNames: Array[String]){
+		
+	}
 	// Load data via Spark API
 	private def loadData(filename: String): RDD[Array[String]] = {
 		//val newdata = sc.parallelize(Array["test"])
@@ -201,6 +255,7 @@ object JobRoleApp extends SparkContextSupport {
 			val OUTPUT_COL="classifiedRole"
 
 			val EMPTY_PREDICTION = ("NA", Array[Double]())
+			
 
 			val STOP_WORDS = Set("ax","i","you","edu","s","t","m","subject","can","lines","re","what"
 					,"there","all","we","one","the","a","an","of","or","in","for","by","on"

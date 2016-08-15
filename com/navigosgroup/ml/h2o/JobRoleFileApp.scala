@@ -22,6 +22,8 @@ import water.support.{ModelSerializationSupport, SparkContextSupport}
  * Can build model or just read from saved model files.
  */
 object JobRoleFileApp extends SparkContextSupport with ModelSerializationSupport {
+	val RESULT_COL_SEP=","
+	
 			def main(args: Array[String]) {
 		// Prepare environment
 		val sc = new SparkContext(configure("JobRoleApp"))
@@ -56,12 +58,27 @@ object JobRoleFileApp extends SparkContextSupport with ModelSerializationSupport
 //					exportH2OModel(svModel, URI.create("file:////Users/Ninhsth/workspace/NaviClassifier/output/h2omodel/"))
       
       
-      // Read job titles in file and predict
+      // Read job titles in file and predict then write to result file
 			val fw = new FileWriter(JobRoleApp.RESULT_FILE)
-			for(line <- Source.fromFile(JobRoleApp.JOB_TITLE_FILE).getLines()) {
+// Print header
+				fw.write("jobTitle" 
+								+ RESULT_COL_SEP + "ClassifiedRole1" + RESULT_COL_SEP + "ClassifiedRole1Prob"
+								+ RESULT_COL_SEP + "ClassifiedRole2" + RESULT_COL_SEP + "ClassifiedRole2Prob"
+								+ RESULT_COL_SEP + "ClassifiedRole3" + RESULT_COL_SEP + "ClassifiedRole3Prob"
+								+ RESULT_COL_SEP + classNames.mkString("", RESULT_COL_SEP, "" + "\n"))
+      for(line <- Source.fromFile(JobRoleApp.JOB_TITLE_FILE).getLines()) {
 				//println(show(line, predict(line, gbmModel, w2vModel), classNames)) 
 				//print2File(show(line, predict(line, gbmModel, w2vModel), classNames)) 
-				fw.write("\n"+ staticApp.show(line, staticApp.predict(line, modelId, sparkModel), classNames)); 
+				
+				val (predictedClassName,top3Probs, predictedProbs) = staticApp.predict2(line, modelId, sparkModel)			
+				// Print line: input and predicted probabilities
+				//val (predictedClassName, predictedProbs)=staticApp.predict(line, modelId, sparkModel)
+				fw.write(line.replace(",", " ") 
+							+ RESULT_COL_SEP + classNames(predictedProbs.indexOf(top3Probs(0))) + RESULT_COL_SEP + top3Probs(0)
+							+ RESULT_COL_SEP+ classNames(predictedProbs.indexOf(top3Probs(1))) + RESULT_COL_SEP + top3Probs(1)
+							+ RESULT_COL_SEP+ classNames(predictedProbs.indexOf(top3Probs(2))) + RESULT_COL_SEP + top3Probs(2)
+							+ RESULT_COL_SEP+ predictedProbs.mkString("", RESULT_COL_SEP, "" + "\n"))
+				//fw.write("\n" + staticApp.show(line, staticApp.predict(line, modelId, sparkModel), classNames)); 
 				fw.flush();
 			}
 			fw.close()
